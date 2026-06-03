@@ -201,7 +201,7 @@ const ChatList = () => {
                             fontWeight: 700,
                           }}
                         >
-                          {u.username[0].toUpperCase()}
+                           {u.username ? u.username[0].toUpperCase() : '?'}
                         </Avatar>
                       </ListItemAvatar>
                       <ListItemText
@@ -315,7 +315,7 @@ const ChatList = () => {
                             transition: 'border 0.2s ease',
                           }}
                         >
-                          {conv.user.username[0].toUpperCase()}
+                           {conv?.user?.username ? conv.user.username[0].toUpperCase() : '?'}
                         </Avatar>
                       </Box>
                     </ListItemAvatar>

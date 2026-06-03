@@ -314,7 +314,7 @@ const Profile = () => {
                     boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
                   }}
                 >
-                  {profile.username[0].toUpperCase()}
+                  {profile?.username ? profile.username[0].toUpperCase() : '?'}
                 </Avatar>
               </Box>
 
@@ -769,7 +769,7 @@ const Profile = () => {
                   border: '3px solid #EFF3F4',
                 }}
               >
-                {profile.username[0].toUpperCase()}
+                {profile?.username ? profile.username[0].toUpperCase() : '?'}
               </Avatar>
               <IconButton
                 component="label"
@@ -1009,7 +1009,7 @@ const Profile = () => {
                     src={profile.profilePic}
                     sx={{ width: 38, height: 38, bgcolor: '#0F1419', fontWeight: 700, fontSize: '0.85rem' }}
                   >
-                    {selectedPost.username[0].toUpperCase()}
+                    {selectedPost?.username ? selectedPost.username[0].toUpperCase() : '?'}
                   </Avatar>
                   <Box>
                     <Typography sx={{ fontWeight: 800, fontSize: '0.9rem', color: '#0F1419' }}>
@@ -1066,9 +1066,9 @@ const Profile = () => {
                   selectedPost.comments.map((comment, index) => (
                     <Box key={index} sx={{ display: 'flex', gap: 1.5 }}>
                       <Avatar
-                        sx={{ width: 28, height: 28, bgcolor: stringToColor(comment.username), fontWeight: 700, fontSize: '0.7rem' }}
+                        sx={{ width: 28, height: 28, bgcolor: stringToColor(comment.username || 'User'), fontWeight: 700, fontSize: '0.7rem' }}
                       >
-                        {comment.username[0].toUpperCase()}
+                        {comment?.username ? comment.username[0].toUpperCase() : '?'}
                       </Avatar>
                       <Box sx={{ bgcolor: '#fff', p: 1.5, borderRadius: '14px', flex: 1, border: '1px solid #EFF3F4' }}>
                         <Typography sx={{ fontWeight: 700, fontSize: '0.78rem', color: '#0F1419' }}>

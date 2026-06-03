@@ -159,14 +159,14 @@ const Post = ({ post, onPostUpdate, onPostDelete }) => {
         >
           <Avatar
             sx={{
-              bgcolor: stringToColor(localPost.username),
+              bgcolor: stringToColor(localPost.username || 'User'),
               width: 40,
               height: 40,
               fontSize: '0.9rem',
               fontWeight: 700,
             }}
           >
-            {localPost.username[0].toUpperCase()}
+            {localPost.username ? localPost.username[0].toUpperCase() : '?'}
           </Avatar>
           <Box>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8 }}>
@@ -338,7 +338,7 @@ const Post = ({ post, onPostUpdate, onPostDelete }) => {
                     sx={{
                       width: 28,
                       height: 28,
-                      bgcolor: stringToColor(comment.username),
+                      bgcolor: stringToColor(comment.username || 'User'),
                       fontSize: '0.7rem',
                       fontWeight: 700,
                       cursor: 'pointer',
@@ -348,7 +348,7 @@ const Post = ({ post, onPostUpdate, onPostDelete }) => {
                     }}
                     onClick={() => navigate(`/profile/${comment.user}`)}
                   >
-                    {comment.username[0].toUpperCase()}
+                    {comment.username ? comment.username[0].toUpperCase() : '?'}
                   </Avatar>
                   <Box
                     sx={{

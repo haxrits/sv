@@ -309,7 +309,7 @@ const Chat = () => {
             }}
             onClick={() => navigate(`/profile/${receiverId}`)}
           >
-            {receiver.username[0].toUpperCase()}
+            {receiver?.username ? receiver.username[0].toUpperCase() : '?'}
           </Avatar>
 
           <Box sx={{ flexGrow: 1, minWidth: 0 }}>
@@ -369,7 +369,7 @@ const Chat = () => {
             }}
           >
             <MenuItem onClick={() => { navigate(`/profile/${receiverId}`); setHeaderMenu(null); }}>
-              <ListItemIcon><Avatar src={receiver.profilePic} sx={{ width: 24, height: 24, bgcolor: '#0F1419', fontSize: '0.6rem' }}>{receiver.username[0]}</Avatar></ListItemIcon>
+              <ListItemIcon><Avatar src={receiver.profilePic} sx={{ width: 24, height: 24, bgcolor: '#0F1419', fontSize: '0.6rem' }}>{receiver?.username ? receiver.username[0] : '?'}</Avatar></ListItemIcon>
               <ListItemText primary="View Profile" />
             </MenuItem>
             <MenuItem onClick={handleDeleteConversation} sx={{ color: '#FF4757' }}>
@@ -399,7 +399,7 @@ const Chat = () => {
               src={receiver.profilePic}
               sx={{ width: 72, height: 72, mx: 'auto', mb: 2, bgcolor: '#0F1419', fontSize: '1.5rem', fontWeight: 700, border: '3px solid #EFF3F4' }}
             >
-              {receiver.username[0].toUpperCase()}
+              {receiver?.username ? receiver.username[0].toUpperCase() : '?'}
             </Avatar>
             <Typography variant="h6" sx={{ fontWeight: 700, mb: 0.5, fontSize: '1.05rem' }}>
               {receiver.username}
