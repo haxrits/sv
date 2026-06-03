@@ -20,9 +20,6 @@ export const AuthProvider = ({ children }) => {
     if (token && storedUser) {
       const parsedUser = JSON.parse(storedUser);
       setUser(parsedUser);
-      
-      socket.connect();
-      socket.emit('register_user', parsedUser._id);
 
       // Verify token is still valid with the server
       API.get('/auth/me')
@@ -35,13 +32,35 @@ export const AuthProvider = ({ children }) => {
           localStorage.removeItem('token');
           localStorage.removeItem('user');
           setUser(null);
-          socket.disconnect();
         })
         .finally(() => setLoading(false));
     } else {
       setLoading(false);
     }
   }, []);
+
+  // Manage socket connection and automatic re-registration on connection/reconnection
+  useEffect(() => {
+    if (user) {
+      socket.connect();
+
+      const handleConnect = () => {
+        socket.emit('register_user', user._id);
+      };
+
+      if (socket.connected) {
+        handleConnect();
+      }
+
+      socket.on('connect', handleConnect);
+
+      return () => {
+        socket.off('connect', handleConnect);
+      };
+    } else {
+      socket.disconnect();
+    }
+  }, [user]);
 
   /**
    * Login with email and password.
@@ -52,8 +71,6 @@ export const AuthProvider = ({ children }) => {
     localStorage.setItem('token', data.token);
     localStorage.setItem('user', JSON.stringify(data.user));
     setUser(data.user);
-    socket.connect();
-    socket.emit('register_user', data.user._id);
     return data;
   };
 
@@ -62,8 +79,6 @@ export const AuthProvider = ({ children }) => {
     localStorage.setItem('token', data.token);
     localStorage.setItem('user', JSON.stringify(data.user));
     setUser(data.user);
-    socket.connect();
-    socket.emit('register_user', data.user._id);
     return data;
   };
 
@@ -74,7 +89,6 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     setUser(null);
-    socket.disconnect();
   };
 
   return (
