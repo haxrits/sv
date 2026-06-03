@@ -6,8 +6,10 @@ import CreatePost from '../components/CreatePost';
 import Post from '../components/Post';
 import API from '../api';
 import { socket } from '../api/socket';
+import { useAuth } from '../context/AuthContext';
 
 const Feed = () => {
+  const { user } = useAuth();
   const [posts, setPosts] = useState([]);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
@@ -148,6 +150,63 @@ const Feed = () => {
       <Navbar />
 
       <Box sx={{ pt: { xs: 9, sm: 11 } }} className="feed-container">
+        {/* Feed Header / Welcome Banner */}
+        {user && (
+          <Box
+            sx={{
+              mb: 3,
+              p: 2.5,
+              borderRadius: '24px',
+              background: 'linear-gradient(135deg, rgba(255,255,255,0.75) 0%, rgba(255,255,255,0.45) 100%)',
+              backdropFilter: 'blur(20px)',
+              border: '1px solid rgba(255, 255, 255, 0.4)',
+              boxShadow: '0 8px 32px rgba(15,20,25,0.03)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 2,
+              animation: 'fadeInUp 0.35s ease-out'
+            }}
+          >
+            <Box>
+              <Typography variant="h6" sx={{ fontWeight: 800, color: '#0F1419', letterSpacing: '-0.3px', display: 'flex', alignItems: 'center', gap: 1 }}>
+                Hey, {user.username}! <Box component="span" sx={{ animation: 'wave 2.5s infinite', display: 'inline-block', transformOrigin: '70% 70%', '@keyframes wave': { '0%, 60%, 100%': { transform: 'rotate( 0.0deg)' }, '10%, 30%': { transform: 'rotate(14.0deg)' }, '20%': { transform: 'rotate(-8.0deg)' }, '40%': { transform: 'rotate(-4.0deg)' }, '50%': { transform: 'rotate(10.0deg)' } } }}>👋</Box>
+              </Typography>
+              <Typography variant="caption" sx={{ color: '#536471', fontSize: '0.78rem', display: 'block', mt: 0.3 }}>
+                Explore the latest vibes, thoughts, and images from the community.
+              </Typography>
+            </Box>
+            <Box sx={{ position: 'relative' }}>
+              <Avatar
+                src={user.profilePic}
+                sx={{
+                  width: 44,
+                  height: 44,
+                  bgcolor: '#0F1419',
+                  fontSize: '1rem',
+                  fontWeight: 800,
+                  border: '2.5px solid #fff',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+                }}
+              >
+                {user.username?.[0]?.toUpperCase()}
+              </Avatar>
+              <Box
+                sx={{
+                  position: 'absolute',
+                  bottom: 2,
+                  right: 2,
+                  width: 10,
+                  height: 10,
+                  borderRadius: '50%',
+                  bgcolor: '#10B981',
+                  border: '2px solid #fff'
+                }}
+              />
+            </Box>
+          </Box>
+        )}
+
         {/* Create Post Section */}
         <CreatePost onPostCreated={handlePostCreated} />
 

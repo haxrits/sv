@@ -147,11 +147,37 @@ const Navbar = () => {
       setToastOpen(true);
     };
 
+    const handleLikeReceived = (data) => {
+      setToastSender({
+        id: data.sender._id,
+        username: data.sender.username,
+        profilePic: data.sender.profilePic
+      });
+      const truncatedText = data.post.text.length > 25 ? `${data.post.text.substring(0, 25)}...` : data.post.text;
+      setToastMessage(`${data.sender.username} liked your post: "${truncatedText}" ❤️`);
+      setToastType('post');
+      setToastOpen(true);
+    };
+
+    const handleCommentReceived = (data) => {
+      setToastSender({
+        id: data.sender._id,
+        username: data.sender.username,
+        profilePic: data.sender.profilePic
+      });
+      const truncatedComment = data.commentText.length > 25 ? `${data.commentText.substring(0, 25)}...` : data.commentText;
+      setToastMessage(`${data.sender.username} commented: "${truncatedComment}" 💬`);
+      setToastType('post');
+      setToastOpen(true);
+    };
+
     socket.on('receive_message', handleNewMessage);
     socket.on('new_post', handleNewPost);
     socket.on('requests_updated', handleRequestsUpdated);
     socket.on('follow_request_received', handleFollowRequestReceived);
     socket.on('follow_request_accepted', handleFollowRequestAccepted);
+    socket.on('like_received', handleLikeReceived);
+    socket.on('comment_received', handleCommentReceived);
 
     return () => {
       socket.off('receive_message', handleNewMessage);
@@ -159,6 +185,8 @@ const Navbar = () => {
       socket.off('requests_updated', handleRequestsUpdated);
       socket.off('follow_request_received', handleFollowRequestReceived);
       socket.off('follow_request_accepted', handleFollowRequestAccepted);
+      socket.off('like_received', handleLikeReceived);
+      socket.off('comment_received', handleCommentReceived);
     };
   }, [user, location.pathname, fetchRequestsCount]);
 

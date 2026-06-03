@@ -163,6 +163,7 @@ router.put('/:id/like', auth, async (req, res) => {
       (like) => like.user.toString() === req.user._id.toString()
     );
 
+    let liked = false;
     if (existingLikeIndex > -1) {
       // User already liked → remove like (unlike)
       post.likes.splice(existingLikeIndex, 1);
@@ -172,6 +173,7 @@ router.put('/:id/like', auth, async (req, res) => {
         user: req.user._id,
         username: req.user.username,
       });
+      liked = true;
     }
 
     // Update count to stay in sync
@@ -179,6 +181,24 @@ router.put('/:id/like', auth, async (req, res) => {
     await post.save();
 
     if (req.io) req.io.emit('post_updated', post);
+
+    // Send targeted notification to post owner if someone else liked their post
+    if (liked && post.user.toString() !== req.user._id.toString()) {
+      const targetSocketId = req.onlineUsers?.get(post.user.toString());
+      if (targetSocketId) {
+        req.io.to(targetSocketId).emit('like_received', {
+          sender: {
+            _id: req.user._id,
+            username: req.user.username,
+            profilePic: req.user.profilePic || '',
+          },
+          post: {
+            _id: post._id,
+            text: post.text || 'image',
+          }
+        });
+      }
+    }
 
     res.json(post);
   } catch (error) {
@@ -218,6 +238,25 @@ router.post('/:id/comment', auth, async (req, res) => {
     await post.save();
 
     if (req.io) req.io.emit('post_updated', post);
+
+    // Send targeted notification to post owner if someone else commented on their post
+    if (post.user.toString() !== req.user._id.toString()) {
+      const targetSocketId = req.onlineUsers?.get(post.user.toString());
+      if (targetSocketId) {
+        req.io.to(targetSocketId).emit('comment_received', {
+          sender: {
+            _id: req.user._id,
+            username: req.user.username,
+            profilePic: req.user.profilePic || '',
+          },
+          post: {
+            _id: post._id,
+            text: post.text || 'image',
+          },
+          commentText: text.trim()
+        });
+      }
+    }
 
     res.json(post);
   } catch (error) {

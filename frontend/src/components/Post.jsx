@@ -20,6 +20,7 @@ import {
   ChatBubbleOutline as CommentIcon,
   MoreHoriz as MoreHorizIcon,
   DeleteOutline as DeleteIcon,
+  ShareOutlined as ShareIcon
 } from '@mui/icons-material';
 import { useAuth } from '../context/AuthContext';
 import API from '../api';
@@ -152,6 +153,26 @@ const Post = ({ post, onPostUpdate, onPostDelete }) => {
       if (onPostDelete) onPostDelete(localPost._id);
     } catch (err) {
       console.error('Delete failed', err);
+    }
+  };
+
+  // Share Post
+  const handleShare = async () => {
+    const shareData = {
+      title: 'SocialVibe Post',
+      text: `"${localPost.text || 'Check out this post'}" - shared by ${localPost.username} on SocialVibe!`,
+      url: `${window.location.origin}/profile/${localPost.user}`
+    };
+
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData);
+      } else {
+        await navigator.clipboard.writeText(`${shareData.text}\nView here: ${shareData.url}`);
+        alert('Post link copied to clipboard! 📋');
+      }
+    } catch (err) {
+      console.error('Error sharing post', err);
     }
   };
 
@@ -333,6 +354,20 @@ const Post = ({ post, onPostUpdate, onPostDelete }) => {
           >
             {localPost.commentsCount > 0 ? localPost.commentsCount : ''}
           </Typography>
+        </Box>
+
+        {/* Share Button */}
+        <Box sx={{ display: 'flex', alignItems: 'center', ml: 'auto', mr: 1 }}>
+          <IconButton
+            onClick={handleShare}
+            sx={{
+              color: '#536471',
+              transition: 'all 0.15s ease',
+              '&:hover': { bgcolor: 'rgba(83,100,113,0.06)', color: '#0F1419' },
+            }}
+          >
+            <ShareIcon sx={{ fontSize: 20 }} />
+          </IconButton>
         </Box>
       </Box>
 
