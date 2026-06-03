@@ -90,5 +90,7 @@ postSchema.pre('validate', function (next) {
 
 // Index for efficient feed queries (newest first)
 postSchema.index({ createdAt: -1 });
+// Index for efficient user-specific posts queries (newest first)
+postSchema.index({ user: 1, createdAt: -1 });
 
 module.exports = mongoose.model('Post', postSchema);

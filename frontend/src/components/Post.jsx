@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Card,
@@ -63,6 +63,11 @@ const Post = ({ post, onPostUpdate, onPostDelete }) => {
   const [isLiking, setIsLiking] = useState(false);
   const [isCommenting, setIsCommenting] = useState(false);
   
+  // Keep local state in sync with parent updates (like socket broadcasts)
+  useEffect(() => {
+    setLocalPost(post);
+  }, [post]);
+
   // Image zoom modal state
   const [zoomImage, setZoomImage] = useState(false);
   
@@ -104,15 +109,35 @@ const Post = ({ post, onPostUpdate, onPostDelete }) => {
   // Add Comment
   const handleComment = async (e) => {
     e.preventDefault();
-    if (!commentText.trim() || isCommenting || !user) return;
+    const trimmedComment = commentText.trim();
+    if (!trimmedComment || isCommenting || !user) return;
     
     setIsCommenting(true);
+    const previousPost = { ...localPost };
+    
+    // Optimistic comment object
+    const tempComment = {
+      _id: `temp-${Date.now()}`,
+      user: user._id,
+      username: user.username,
+      text: trimmedComment,
+      createdAt: new Date().toISOString(),
+    };
+    
+    setLocalPost(prev => ({
+      ...prev,
+      commentsCount: prev.commentsCount + 1,
+      comments: [...(prev.comments || []), tempComment]
+    }));
+    setCommentText('');
+    
     try {
-      const { data } = await API.post(`/posts/${localPost._id}/comment`, { text: commentText });
+      const { data } = await API.post(`/posts/${localPost._id}/comment`, { text: trimmedComment });
       setLocalPost(data);
       if (onPostUpdate) onPostUpdate(data);
-      setCommentText('');
     } catch (err) {
+      setLocalPost(previousPost);
+      setCommentText(trimmedComment);
       console.error('Comment failed', err);
     } finally {
       setIsCommenting(false);
