@@ -11,12 +11,14 @@ import {
   ChatBubbleRounded as ChatIcon,
   Search as SearchIcon,
   Close as CloseIcon,
-  ArrowBack as ArrowBackIcon
+  ArrowBack as ArrowBackIcon,
+  Add as AddIcon
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import API from '../api';
 import { socket } from '../api/socket';
+import CreatePost from './CreatePost';
 
 const Navbar = () => {
   const { user, logout } = useAuth();
@@ -24,6 +26,7 @@ const Navbar = () => {
   const location = useLocation();
   const [anchorEl, setAnchorEl] = useState(null);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [createPostOpen, setCreatePostOpen] = useState(false);
   const [requestsCount, setRequestsCount] = useState(0);
 
   // Global toast states
@@ -257,6 +260,18 @@ const Navbar = () => {
                   }}
                 >
                   <SearchIcon sx={{ fontSize: 22 }} />
+                </IconButton>
+                <IconButton
+                  onClick={() => setCreatePostOpen(true)}
+                  sx={{
+                    color: '#536471',
+                    width: 38,
+                    height: 38,
+                    transition: 'all 0.15s ease',
+                    '&:hover': { bgcolor: '#EFF3F4', color: '#0F1419' },
+                  }}
+                >
+                  <AddIcon sx={{ fontSize: 24 }} />
                 </IconButton>
                 <IconButton
                   onClick={() => navigate('/chat')}
@@ -773,6 +788,61 @@ const Navbar = () => {
             )}
           </DialogContent>
         </Box>
+      </Dialog>
+
+      {/* Mobile Floating Action Button (FAB) */}
+      {user && (
+        <IconButton
+          onClick={() => setCreatePostOpen(true)}
+          sx={{
+            display: { xs: 'flex', sm: 'none' },
+            position: 'fixed',
+            bottom: 72,
+            right: 16,
+            zIndex: 1000,
+            width: 52,
+            height: 52,
+            bgcolor: '#0F1419',
+            color: '#fff',
+            boxShadow: '0 4px 16px rgba(15,20,25,0.3)',
+            transition: 'all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+            '&:hover': { bgcolor: '#1A2530', transform: 'scale(1.05)' },
+            '&:active': { transform: 'scale(0.95)' },
+          }}
+        >
+          <AddIcon sx={{ fontSize: 26 }} />
+        </IconButton>
+      )}
+
+      {/* Create Post Dialog */}
+      <Dialog
+        open={createPostOpen}
+        onClose={() => setCreatePostOpen(false)}
+        fullWidth
+        maxWidth="sm"
+        PaperProps={{
+          sx: {
+            borderRadius: '24px',
+            bgcolor: 'rgba(255, 255, 255, 0.95)',
+            backdropFilter: 'blur(20px)',
+            border: '1px solid rgba(15, 20, 25, 0.08)',
+            boxShadow: '0 24px 64px rgba(0,0,0,0.15)',
+            p: 1.5,
+          }
+        }}
+      >
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: 2, py: 1 }}>
+          <Typography sx={{ fontWeight: 800, fontSize: '1.05rem', color: '#0F1419' }}>
+            Create new post
+          </Typography>
+          <IconButton onClick={() => setCreatePostOpen(false)} size="small" sx={{ color: '#536471' }}>
+            <CloseIcon sx={{ fontSize: 20 }} />
+          </IconButton>
+        </Box>
+        <Divider sx={{ mx: 2, mb: 1, borderColor: '#EFF3F4' }} />
+        <DialogContent sx={{ p: 0 }}>
+          <CreatePost onPostCreated={() => setCreatePostOpen(false)} isModal />
+        </DialogContent>
       </Dialog>
     </>
   );

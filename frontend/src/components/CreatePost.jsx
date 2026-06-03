@@ -30,8 +30,9 @@ const stringToColor = (str) => {
 /**
  * CreatePost — Component for users to compose and submit new posts.
  * @param {Function} onPostCreated - Callback to refresh feed after successful post.
+ * @param {Boolean} isModal - Whether this component is rendered inside a dialog.
  */
-const CreatePost = ({ onPostCreated }) => {
+const CreatePost = ({ onPostCreated, isModal = false }) => {
   const { user } = useAuth();
   const [text, setText] = useState('');
   const [imageFile, setImageFile] = useState(null);
@@ -105,15 +106,15 @@ const CreatePost = ({ onPostCreated }) => {
 
   return (
     <Card
-      className="fade-in-up"
+      className={isModal ? "" : "fade-in-up"}
       sx={{
-        mb: { xs: 0.5, sm: 2.5 },
+        mb: isModal ? 0 : { xs: 0.5, sm: 2.5 },
         p: 0,
-        borderRadius: { xs: 0, sm: '20px' },
+        borderRadius: isModal ? 0 : { xs: 0, sm: '20px' },
         overflow: 'hidden',
-        border: { xs: 'none', sm: '1px solid' },
+        border: isModal ? 'none' : { xs: 'none', sm: '1px solid' },
         borderColor: { sm: focused ? '#0F1419' : '#EFF3F4' },
-        boxShadow: { xs: 'none', sm: focused ? '0 4px 20px rgba(15,20,25,0.06)' : '0 2px 12px rgba(0,0,0,0.03)' },
+        boxShadow: isModal ? 'none' : { xs: 'none', sm: focused ? '0 4px 20px rgba(15,20,25,0.06)' : '0 2px 12px rgba(0,0,0,0.03)' },
         transition: 'border-color 0.25s ease, box-shadow 0.25s ease',
       }}
     >

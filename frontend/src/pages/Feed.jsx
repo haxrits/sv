@@ -80,7 +80,10 @@ const Feed = () => {
     setPage(1);
 
     const handleNewPost = (post) => {
-      setPosts((prev) => [post, ...prev]);
+      setPosts((prev) => {
+        if (prev.some((p) => p._id === post._id)) return prev;
+        return [post, ...prev];
+      });
     };
     const handleUpdatePost = (updatedPost) => {
       setPosts((prev) => prev.map((p) => (p._id === updatedPost._id ? updatedPost : p)));
@@ -124,7 +127,10 @@ const Feed = () => {
 
   // Callbacks for post lifecycle
   const handlePostCreated = (newPost) => {
-    setPosts((prev) => [newPost, ...prev]);
+    setPosts((prev) => {
+      if (prev.some((p) => p._id === newPost._id)) return prev;
+      return [newPost, ...prev];
+    });
   };
 
   const handlePostUpdate = (updatedPost) => {

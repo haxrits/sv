@@ -129,11 +129,41 @@ const Profile = () => {
     const handleRequestsUpdated = () => {
       fetchProfile();
     };
+    const handleNewPost = (post) => {
+      if (post.user === id) {
+        setPosts((prev) => {
+          if (prev.some((p) => p._id === post._id)) return prev;
+          return [post, ...prev];
+        });
+      }
+    };
+    const handleUpdatePost = (updatedPost) => {
+      if (updatedPost.user === id) {
+        setPosts((prev) => prev.map((p) => (p._id === updatedPost._id ? updatedPost : p)));
+        if (selectedPost && selectedPost._id === updatedPost._id) {
+          setSelectedPost(updatedPost);
+        }
+      }
+    };
+    const handleDeletePost = (postId) => {
+      setPosts((prev) => prev.filter((p) => p._id !== postId));
+      if (selectedPost && selectedPost._id === postId) {
+        setSelectedPost(null);
+      }
+    };
+
     socket.on('requests_updated', handleRequestsUpdated);
+    socket.on('new_post', handleNewPost);
+    socket.on('post_updated', handleUpdatePost);
+    socket.on('post_deleted', handleDeletePost);
+
     return () => {
       socket.off('requests_updated', handleRequestsUpdated);
+      socket.off('new_post', handleNewPost);
+      socket.off('post_updated', handleUpdatePost);
+      socket.off('post_deleted', handleDeletePost);
     };
-  }, [user, id]);
+  }, [user, id, selectedPost]);
 
   const handleFollow = async () => {
     try {
