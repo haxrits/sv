@@ -48,7 +48,7 @@ router.get('/:id', async (req, res) => {
  */
 router.put('/profile', auth, upload.single('profilePic'), async (req, res) => {
   try {
-    const { bio } = req.body;
+    const { bio, isPrivate } = req.body;
     let profilePic = null;
 
     if (req.file) {
@@ -59,6 +59,7 @@ router.put('/profile', auth, upload.single('profilePic'), async (req, res) => {
     const updateFields = {};
     if (bio !== undefined) updateFields.bio = bio.trim();
     if (profilePic !== null) updateFields.profilePic = profilePic;
+    if (isPrivate !== undefined) updateFields.isPrivate = isPrivate === 'true';
 
     const user = await User.findByIdAndUpdate(
       req.user._id,
@@ -98,16 +99,44 @@ router.put('/:id/follow', auth, async (req, res) => {
       // Unfollow
       await currentUser.updateOne({ $pull: { following: targetUser._id } });
       await targetUser.updateOne({ $pull: { followers: currentUser._id } });
+
+      // Update target socket
+      const targetSocketId = req.onlineUsers?.get(targetUser._id.toString());
+      if (targetSocketId) {
+        req.io.to(targetSocketId).emit('requests_updated');
+      }
+
       res.json({ success: true, status: 'unfollowed', isFollowing: false });
     } else if (isRequestSent) {
       // Cancel request
       await currentUser.updateOne({ $pull: { followRequestsSent: targetUser._id } });
       await targetUser.updateOne({ $pull: { followRequestsReceived: currentUser._id } });
+
+      // Update target socket
+      const targetSocketId = req.onlineUsers?.get(targetUser._id.toString());
+      if (targetSocketId) {
+        req.io.to(targetSocketId).emit('requests_updated');
+      }
+
       res.json({ success: true, status: 'request_cancelled', isFollowing: false });
     } else {
       // Send follow request
       await currentUser.updateOne({ $push: { followRequestsSent: targetUser._id } });
       await targetUser.updateOne({ $push: { followRequestsReceived: currentUser._id } });
+
+      // Update target socket
+      const targetSocketId = req.onlineUsers?.get(targetUser._id.toString());
+      if (targetSocketId) {
+        req.io.to(targetSocketId).emit('requests_updated');
+        req.io.to(targetSocketId).emit('follow_request_received', {
+          sender: {
+            _id: currentUser._id,
+            username: currentUser.username,
+            profilePic: currentUser.profilePic
+          }
+        });
+      }
+
       res.json({ success: true, status: 'request_sent', isFollowing: false });
     }
   } catch (error) {
@@ -145,6 +174,19 @@ router.put('/:id/accept-request', auth, async (req, res) => {
       $push: { following: currentUser._id }
     });
 
+    // Notify the user who sent the request (targetUser)
+    const targetSocketId = req.onlineUsers?.get(targetUser._id.toString());
+    if (targetSocketId) {
+      req.io.to(targetSocketId).emit('requests_updated');
+      req.io.to(targetSocketId).emit('follow_request_accepted', {
+        sender: {
+          _id: currentUser._id,
+          username: currentUser.username,
+          profilePic: currentUser.profilePic
+        }
+      });
+    }
+
     res.json({ success: true, status: 'accepted' });
   } catch (error) {
     console.error('Accept request error:', error);
@@ -169,6 +211,12 @@ router.put('/:id/reject-request', auth, async (req, res) => {
     // Remove from pending lists
     await currentUser.updateOne({ $pull: { followRequestsReceived: targetUser._id } });
     await targetUser.updateOne({ $pull: { followRequestsSent: currentUser._id } });
+
+    // Notify the user who sent the request (targetUser)
+    const targetSocketId = req.onlineUsers?.get(targetUser._id.toString());
+    if (targetSocketId) {
+      req.io.to(targetSocketId).emit('requests_updated');
+    }
 
     res.json({ success: true, status: 'rejected' });
   } catch (error) {

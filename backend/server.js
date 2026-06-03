@@ -51,8 +51,10 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // Expose Socket.io to routes (useful for broadcasting events from standard HTTP routes)
 app.use((req, res, next) => {
   req.io = io;
+  req.onlineUsers = onlineUsers;
   next();
 });
+
 
 // --------------- Routes ---------------
 app.use('/api/auth', require('./routes/auth'));

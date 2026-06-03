@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   AppBar, Toolbar, Typography, Button, Box, Avatar, Menu, MenuItem,
   IconButton, Divider, ListItemIcon, ListItemText, BottomNavigation, BottomNavigationAction, Paper, Badge,
-  Snackbar, Slide, Dialog, DialogContent, TextField, List, ListItem, CircularProgress
+  Snackbar, Slide, Dialog, DialogContent, TextField, List, ListItem, CircularProgress, Chip
 } from '@mui/material';
 import {
   Logout as LogoutIcon,
@@ -10,7 +10,8 @@ import {
   HomeRounded as HomeIcon,
   ChatBubbleRounded as ChatIcon,
   Search as SearchIcon,
-  Close as CloseIcon
+  Close as CloseIcon,
+  ArrowBack as ArrowBackIcon
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -23,11 +24,12 @@ const Navbar = () => {
   const location = useLocation();
   const [anchorEl, setAnchorEl] = useState(null);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [requestsCount, setRequestsCount] = useState(0);
 
   // Global toast states
   const [toastOpen, setToastOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
-  const [toastType, setToastType] = useState('message'); // 'message' or 'post'
+  const [toastType, setToastType] = useState('message'); // 'message', 'post', or 'request'
   const [toastSender, setToastSender] = useState(null); // { id, username, profilePic }
 
   // Search states
@@ -67,9 +69,20 @@ const Navbar = () => {
     }
   }, [user]);
 
+  const fetchRequestsCount = useCallback(async () => {
+    if (!user) return;
+    try {
+      const { data } = await API.get(`/users/${user._id}`);
+      setRequestsCount(data.followRequestsReceived?.length || 0);
+    } catch (err) {
+      console.error('Failed to fetch requests count', err);
+    }
+  }, [user]);
+
   useEffect(() => {
     fetchUnreadCount();
-  }, [fetchUnreadCount]);
+    fetchRequestsCount();
+  }, [fetchUnreadCount, fetchRequestsCount]);
 
   useEffect(() => {
     if (!user) return;
@@ -105,13 +118,46 @@ const Navbar = () => {
       }
     };
 
+    const handleRequestsUpdated = () => {
+      fetchRequestsCount();
+    };
+
+    const handleFollowRequestReceived = (data) => {
+      setToastSender({
+        id: data.sender._id,
+        username: data.sender.username,
+        profilePic: data.sender.profilePic
+      });
+      setToastMessage(`${data.sender.username} requested to follow you. 👥`);
+      setToastType('request');
+      setToastOpen(true);
+    };
+
+    const handleFollowRequestAccepted = (data) => {
+      setToastSender({
+        id: data.sender._id,
+        username: data.sender.username,
+        profilePic: data.sender.profilePic
+      });
+      setToastMessage(`${data.sender.username} accepted your follow request. 🎉`);
+      setToastType('post');
+      setToastOpen(true);
+    };
+
     socket.on('receive_message', handleNewMessage);
     socket.on('new_post', handleNewPost);
+    socket.on('requests_updated', handleRequestsUpdated);
+    socket.on('follow_request_received', handleFollowRequestReceived);
+    socket.on('follow_request_accepted', handleFollowRequestAccepted);
+
     return () => {
       socket.off('receive_message', handleNewMessage);
       socket.off('new_post', handleNewPost);
+      socket.off('requests_updated', handleRequestsUpdated);
+      socket.off('follow_request_received', handleFollowRequestReceived);
+      socket.off('follow_request_accepted', handleFollowRequestAccepted);
     };
-  }, [user, location.pathname]);
+  }, [user, location.pathname, fetchRequestsCount]);
 
   useEffect(() => {
     if (location.pathname.startsWith('/chat')) {
@@ -121,6 +167,12 @@ const Navbar = () => {
       return () => clearTimeout(timer);
     }
   }, [location.pathname, fetchUnreadCount]);
+
+  useEffect(() => {
+    if (location.pathname.startsWith('/profile')) {
+      fetchRequestsCount();
+    }
+  }, [location.pathname, fetchRequestsCount]);
 
   const handleLogout = () => {
     logout();
@@ -251,7 +303,25 @@ const Navbar = () => {
                     '&:hover': { bgcolor: '#EFF3F4', color: '#0F1419' },
                   }}
                 >
-                  <PersonIcon sx={{ fontSize: 22 }} />
+                  <Badge
+                    badgeContent={requestsCount}
+                    max={99}
+                    sx={{
+                      '& .MuiBadge-badge': {
+                        bgcolor: '#10B981',
+                        color: '#fff',
+                        fontWeight: 800,
+                        fontSize: '0.6rem',
+                        minWidth: 17,
+                        height: 17,
+                        borderRadius: '9px',
+                        border: '2px solid #fff',
+                        boxShadow: requestsCount > 0 ? '0 2px 6px rgba(16,185,129,0.35)' : 'none',
+                      },
+                    }}
+                  >
+                    <PersonIcon sx={{ fontSize: 22 }} />
+                  </Badge>
                 </IconButton>
               </Box>
 
@@ -322,8 +392,31 @@ const Navbar = () => {
                   onClick={() => { navigate(`/profile/${user._id}`); setAnchorEl(null); }}
                   sx={{ py: 1.3, px: 2, fontSize: '0.88rem', '&:hover': { bgcolor: '#F7F8FA' } }}
                 >
-                  <ListItemIcon><PersonIcon fontSize="small" sx={{ color: '#536471' }} /></ListItemIcon>
-                  <ListItemText primary="Profile" primaryTypographyProps={{ fontWeight: 600, fontSize: '0.88rem' }} />
+                  <ListItemIcon>
+                    <Badge badgeContent={requestsCount} color="error" variant="dot">
+                      <PersonIcon fontSize="small" sx={{ color: '#536471' }} />
+                    </Badge>
+                  </ListItemIcon>
+                  <ListItemText
+                    primary={
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Typography sx={{ fontWeight: 600, fontSize: '0.88rem' }}>Profile</Typography>
+                        {requestsCount > 0 && (
+                          <Chip
+                            label={`${requestsCount} request${requestsCount > 1 ? 's' : ''}`}
+                            size="small"
+                            sx={{
+                              bgcolor: 'rgba(16, 185, 129, 0.1)',
+                              color: '#10B981',
+                              fontWeight: 700,
+                              fontSize: '0.68rem',
+                              height: 18,
+                            }}
+                          />
+                        )}
+                      </Box>
+                    }
+                  />
                 </MenuItem>
                 <MenuItem
                   onClick={handleLogout}
@@ -436,7 +529,30 @@ const Navbar = () => {
                 </Badge>
               }
             />
-            <BottomNavigationAction icon={<PersonIcon sx={{ fontSize: 26 }} />} />
+            <BottomNavigationAction
+              icon={
+                <Badge
+                  badgeContent={requestsCount}
+                  max={99}
+                  sx={{
+                    '& .MuiBadge-badge': {
+                      bgcolor: '#10B981',
+                      color: '#fff',
+                      fontWeight: 800,
+                      fontSize: '0.55rem',
+                      minWidth: 15,
+                      height: 15,
+                      borderRadius: '8px',
+                      border: '1.5px solid #fff',
+                      top: 2,
+                      right: 0,
+                    },
+                  }}
+                >
+                  <PersonIcon sx={{ fontSize: 26 }} />
+                </Badge>
+              }
+            />
           </BottomNavigation>
         </Paper>
       )}
@@ -457,6 +573,8 @@ const Navbar = () => {
               navigate(`/chat/${toastSender.id}`);
             } else if (toastType === 'post' && toastSender) {
               navigate(`/profile/${toastSender.id}`);
+            } else if (toastType === 'request') {
+              navigate(`/profile/${user._id}`);
             }
           }}
           elevation={0}
@@ -490,7 +608,11 @@ const Navbar = () => {
           </Avatar>
           <Box sx={{ flexGrow: 1, minWidth: 0 }}>
             <Typography sx={{ fontWeight: 700, fontSize: '0.85rem', lineHeight: 1.2 }}>
-              {toastType === 'message' ? `New message from ${toastSender?.username}` : 'New post shared'}
+              {toastType === 'message'
+                ? `New message from ${toastSender?.username}`
+                : toastType === 'request'
+                ? 'Follow Request'
+                : 'New post shared'}
             </Typography>
             <Typography sx={{ fontSize: '0.78rem', color: '#A0AEC0', mt: 0.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {toastMessage}
@@ -500,143 +622,157 @@ const Navbar = () => {
       </Snackbar>
       {/* Search Dialog */}
       <Dialog
+        fullScreen
         open={searchOpen}
         onClose={() => { setSearchOpen(false); setSearchQuery(''); }}
-        maxWidth="xs"
-        fullWidth
         PaperProps={{
           sx: {
-            borderRadius: '24px',
-            bgcolor: 'rgba(255, 255, 255, 0.95)',
-            backdropFilter: 'blur(20px)',
-            border: '1px solid rgba(15, 20, 25, 0.08)',
-            boxShadow: '0 24px 64px rgba(0,0,0,0.15)',
-            p: 1.5,
-            m: { xs: 2, sm: 4 },
+            bgcolor: '#F7F8FA',
           }
         }}
       >
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 1, py: 0.5 }}>
-          <TextField
-            autoFocus
-            fullWidth
-            placeholder="Search people..."
-            variant="standard"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            InputProps={{
-              disableUnderline: true,
-              startAdornment: (
-                <SearchIcon sx={{ color: '#536471', mr: 1.5, fontSize: 22 }} />
-              ),
-              sx: {
-                fontSize: '1rem',
-                py: 1,
-                color: '#0F1419',
-                '& input::placeholder': { color: '#536471', opacity: 0.8 },
-              }
-            }}
-          />
-          {searchQuery && (
-            <IconButton 
-              size="small" 
-              onClick={() => setSearchQuery('')}
-              sx={{ color: '#536471' }}
-            >
-              <CloseIcon sx={{ fontSize: 18 }} />
+        <Box
+          sx={{
+            maxWidth: 580,
+            width: '100%',
+            mx: 'auto',
+            minHeight: '100vh',
+            display: 'flex',
+            flexDirection: 'column',
+            bgcolor: '#fff',
+            borderLeft: { sm: '1px solid #EFF3F4' },
+            borderRight: { sm: '1px solid #EFF3F4' },
+            boxShadow: { sm: '0 0 20px rgba(0,0,0,0.03)' }
+          }}
+        >
+          {/* Header with Search and Back */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 2, py: 1.5, borderBottom: '1px solid #EFF3F4' }}>
+            <IconButton onClick={() => { setSearchOpen(false); setSearchQuery(''); }} sx={{ color: '#536471' }}>
+              <ArrowBackIcon sx={{ fontSize: 22 }} />
             </IconButton>
-          )}
-        </Box>
+            <TextField
+              autoFocus
+              fullWidth
+              placeholder="Search people..."
+              variant="standard"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              InputProps={{
+                disableUnderline: true,
+                startAdornment: (
+                  <SearchIcon sx={{ color: '#536471', mr: 1.5, fontSize: 22 }} />
+                ),
+                sx: {
+                  fontSize: '1rem',
+                  color: '#0F1419',
+                  '& input::placeholder': { color: '#536471', opacity: 0.8 },
+                }
+              }}
+            />
+            {searchQuery && (
+              <IconButton 
+                size="small" 
+                onClick={() => setSearchQuery('')}
+                sx={{ color: '#536471' }}
+              >
+                <CloseIcon sx={{ fontSize: 18 }} />
+              </IconButton>
+            )}
+          </Box>
 
-        <Divider sx={{ my: 1, borderColor: '#EFF3F4' }} />
-
-        <DialogContent sx={{ p: 0, maxHeight: 350, minHeight: searchQuery ? 150 : 80, overflowY: 'auto' }}>
-          {searchLoading ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 120 }}>
-              <CircularProgress size={24} sx={{ color: '#0F1419' }} />
-            </Box>
-          ) : !searchQuery.trim() ? (
-            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 80, color: '#536471' }}>
-              <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                Type to find other users on SocialVibe
-              </Typography>
-            </Box>
-          ) : searchResults.length === 0 ? (
-            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 120, color: '#536471', px: 2, textAlign: 'center' }}>
-              <Typography variant="body2" sx={{ fontWeight: 600, color: '#0F1419', mb: 0.5 }}>
-                No results for "{searchQuery}"
-              </Typography>
-              <Typography variant="caption">
-                Make sure the name is spelled correctly or try another search.
-              </Typography>
-            </Box>
-          ) : (
-            <List disablePadding>
-              {searchResults.map((u) => (
-                <ListItem
-                  key={u._id}
-                  disablePadding
-                  secondaryAction={
-                    <Button
-                      variant="outlined"
-                      size="small"
-                      sx={{
-                        borderRadius: 50,
-                        textTransform: 'none',
-                        fontSize: '0.78rem',
-                        fontWeight: 700,
-                        color: '#0F1419',
-                        borderColor: '#CFD9DE',
-                        '&:hover': { bgcolor: '#EFF3F4', borderColor: '#0F1419' }
-                      }}
+          <DialogContent sx={{ p: 0, overflowY: 'auto' }}>
+            {searchLoading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 120 }}>
+                <CircularProgress size={24} sx={{ color: '#0F1419' }} />
+              </Box>
+            ) : !searchQuery.trim() ? (
+              <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 150, color: '#536471', px: 3, textAlign: 'center' }}>
+                <SearchIcon sx={{ fontSize: 40, color: '#CFD9DE', mb: 1.5 }} />
+                <Typography variant="body2" sx={{ fontWeight: 600, color: '#0F1419' }}>
+                  Search for friends on SocialVibe
+                </Typography>
+                <Typography variant="caption" sx={{ color: '#536471', mt: 0.5 }}>
+                  Find users by their usernames and check out their profile board!
+                </Typography>
+              </Box>
+            ) : searchResults.length === 0 ? (
+              <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 150, color: '#536471', px: 2, textAlign: 'center' }}>
+                <Typography variant="body2" sx={{ fontWeight: 600, color: '#0F1419', mb: 0.5 }}>
+                  No results for "{searchQuery}"
+                </Typography>
+                <Typography variant="caption">
+                  Make sure the name is spelled correctly or try another search.
+                </Typography>
+              </Box>
+            ) : (
+              <List disablePadding>
+                {searchResults.map((u) => (
+                  <ListItem
+                    key={u._id}
+                    disablePadding
+                    secondaryAction={
+                      <Button
+                        variant="outlined"
+                        size="small"
+                        sx={{
+                          borderRadius: 50,
+                          textTransform: 'none',
+                          fontSize: '0.78rem',
+                          fontWeight: 700,
+                          color: '#0F1419',
+                          borderColor: '#CFD9DE',
+                          '&:hover': { bgcolor: '#EFF3F4', borderColor: '#0F1419' },
+                          mr: 1
+                        }}
+                        onClick={() => {
+                          setSearchOpen(false);
+                          setSearchQuery('');
+                          navigate(`/profile/${u._id}`);
+                        }}
+                      >
+                        View
+                      </Button>
+                    }
+                  >
+                    <Box
                       onClick={() => {
                         setSearchOpen(false);
                         setSearchQuery('');
                         navigate(`/profile/${u._id}`);
                       }}
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 1.5,
+                        width: '100%',
+                        py: 1.5,
+                        px: 2.5,
+                        cursor: 'pointer',
+                        transition: 'background-color 0.15s',
+                        '&:hover': { bgcolor: '#F7F8FA' },
+                      }}
                     >
-                      View
-                    </Button>
-                  }
-                >
-                  <Box
-                    onClick={() => {
-                      setSearchOpen(false);
-                      setSearchQuery('');
-                      navigate(`/profile/${u._id}`);
-                    }}
-                    sx={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 1.5,
-                      width: '100%',
-                      py: 1.2,
-                      px: 1.5,
-                      cursor: 'pointer',
-                      transition: 'background-color 0.15s',
-                      '&:hover': { bgcolor: '#F7F8FA' },
-                    }}
-                  >
-                    <Avatar
-                      src={u.profilePic}
-                      sx={{ bgcolor: '#0F1419', width: 38, height: 38, fontSize: '0.85rem', fontWeight: 700 }}
-                    >
-                      {u.username ? u.username[0].toUpperCase() : '?'}
-                    </Avatar>
-                    <Box sx={{ minWidth: 0, flex: 1, pr: 7 }}>
-                      <Typography sx={{ fontWeight: 700, fontSize: '0.88rem', color: '#0F1419', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {u.username}
-                      </Typography>
-                      <Typography sx={{ color: '#536471', fontSize: '0.75rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {u.bio || 'No bio yet'}
-                      </Typography>
+                      <Avatar
+                        src={u.profilePic}
+                        sx={{ bgcolor: '#0F1419', width: 40, height: 40, fontSize: '0.9rem', fontWeight: 700 }}
+                      >
+                        {u.username ? u.username[0].toUpperCase() : '?'}
+                      </Avatar>
+                      <Box sx={{ minWidth: 0, flex: 1, pr: 7 }}>
+                        <Typography sx={{ fontWeight: 700, fontSize: '0.9rem', color: '#0F1419', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {u.username}
+                        </Typography>
+                        <Typography sx={{ color: '#536471', fontSize: '0.78rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {u.bio || 'No bio yet'}
+                        </Typography>
+                      </Box>
                     </Box>
-                  </Box>
-                </ListItem>
-              ))}
-            </List>
-          )}
-        </DialogContent>
+                  </ListItem>
+                ))}
+              </List>
+            )}
+          </DialogContent>
+        </Box>
       </Dialog>
     </>
   );

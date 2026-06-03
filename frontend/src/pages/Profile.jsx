@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   Box, Avatar, Typography, Button, IconButton, Dialog, TextField, DialogTitle,
   DialogContent, DialogActions, CircularProgress, List, ListItem, ListItemAvatar,
-  ListItemText, Fade, Chip
+  ListItemText, Fade, Chip, Switch, FormControlLabel, Badge
 } from '@mui/material';
 import {
   Edit as EditIcon,
@@ -15,12 +15,15 @@ import {
   ChatBubbleOutline as CommentIcon,
   DeleteOutline as DeleteIcon,
   Dashboard as DashboardIcon,
-  ViewAgenda as TimelineIcon
+  ViewAgenda as TimelineIcon,
+  LockOutlined as LockIcon,
+  People as PeopleIcon
 } from '@mui/icons-material';
 import Navbar from '../components/Navbar';
 import API from '../api';
 import { useAuth } from '../context/AuthContext';
 import Post from '../components/Post';
+import { socket } from '../api/socket';
 
 const stringToColor = (str) => {
   if (!str) return '#0F1419';
@@ -72,6 +75,7 @@ const Profile = () => {
   const [bio, setBio] = useState('');
   const [profilePic, setProfilePic] = useState(null);
   const [picPreview, setPicPreview] = useState('');
+  const [isPrivate, setIsPrivate] = useState(false);
   const [saving, setSaving] = useState(false);
 
   // List Modal Mode ('followers' or 'following')
@@ -119,6 +123,17 @@ const Profile = () => {
       setPostsLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (!user) return;
+    const handleRequestsUpdated = () => {
+      fetchProfile();
+    };
+    socket.on('requests_updated', handleRequestsUpdated);
+    return () => {
+      socket.off('requests_updated', handleRequestsUpdated);
+    };
+  }, [user, id]);
 
   const handleFollow = async () => {
     try {
@@ -173,6 +188,36 @@ const Profile = () => {
     }
   };
 
+  const handleAcceptRequestFromUser = async (reqUserId) => {
+    try {
+      const { data } = await API.put(`/users/${reqUserId}/accept-request`);
+      if (data.success) {
+        const acceptedUserObj = profile.followRequestsReceived.find(r => (r._id || r) === reqUserId);
+        setProfile(prev => ({
+          ...prev,
+          followRequestsReceived: prev.followRequestsReceived.filter(r => (r._id || r) !== reqUserId),
+          followers: acceptedUserObj ? [...prev.followers, acceptedUserObj] : prev.followers
+        }));
+      }
+    } catch (err) {
+      console.error('Accept request error', err);
+    }
+  };
+
+  const handleRejectRequestFromUser = async (reqUserId) => {
+    try {
+      const { data } = await API.put(`/users/${reqUserId}/reject-request`);
+      if (data.success) {
+        setProfile(prev => ({
+          ...prev,
+          followRequestsReceived: prev.followRequestsReceived.filter(r => (r._id || r) !== reqUserId)
+        }));
+      }
+    } catch (err) {
+      console.error('Reject request error', err);
+    }
+  };
+
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -187,11 +232,12 @@ const Profile = () => {
       const formData = new FormData();
       if (bio !== profile.bio) formData.append('bio', bio);
       if (profilePic) formData.append('profilePic', profilePic);
+      formData.append('isPrivate', isPrivate);
       
       const { data } = await API.put('/users/profile', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
-      setProfile(prev => ({ ...prev, bio: data.bio, profilePic: data.profilePic }));
+      setProfile(prev => ({ ...prev, bio: data.bio, profilePic: data.profilePic, isPrivate: data.isPrivate }));
       setEditOpen(false);
     } catch (err) {
       console.error('Failed to save profile', err);
@@ -203,6 +249,7 @@ const Profile = () => {
   const openEdit = () => {
     setBio(profile.bio || '');
     setPicPreview(profile.profilePic || '');
+    setIsPrivate(profile.isPrivate || false);
     setEditOpen(true);
   };
 
@@ -500,237 +547,385 @@ const Profile = () => {
           </Box>
         </Fade>
 
-        {/* Tab Controls */}
-        <Box sx={{ display: 'flex', justifyContent: 'center', gap: 2, mt: 4, mb: 2.5, px: { xs: 2, sm: 0 } }}>
-          <Button
-            onClick={() => setActiveTab('board')}
-            startIcon={<DashboardIcon sx={{ fontSize: 18 }} />}
-            sx={{
-              borderRadius: 50,
-              px: 3,
-              py: 1,
-              bgcolor: activeTab === 'board' ? '#0F1419' : 'rgba(15, 20, 25, 0.04)',
-              color: activeTab === 'board' ? '#fff' : '#536471',
-              fontWeight: 700,
-              fontSize: '0.82rem',
-              textTransform: 'none',
-              transition: 'all 0.2s ease',
-              boxShadow: activeTab === 'board' ? '0 4px 12px rgba(15,20,25,0.12)' : 'none',
-              '&:hover': { bgcolor: activeTab === 'board' ? '#1A2530' : 'rgba(15,20,25,0.08)' }
-            }}
-          >
-            Creative Board
-          </Button>
-          <Button
-            onClick={() => setActiveTab('timeline')}
-            startIcon={<TimelineIcon sx={{ fontSize: 18 }} />}
-            sx={{
-              borderRadius: 50,
-              px: 3,
-              py: 1,
-              bgcolor: activeTab === 'timeline' ? '#0F1419' : 'rgba(15, 20, 25, 0.04)',
-              color: activeTab === 'timeline' ? '#fff' : '#536471',
-              fontWeight: 700,
-              fontSize: '0.82rem',
-              textTransform: 'none',
-              transition: 'all 0.2s ease',
-              boxShadow: activeTab === 'timeline' ? '0 4px 12px rgba(15,20,25,0.12)' : 'none',
-              '&:hover': { bgcolor: activeTab === 'timeline' ? '#1A2530' : 'rgba(15,20,25,0.08)' }
-            }}
-          >
-            Timeline
-          </Button>
-        </Box>
+        {/* Privacy Check / Tab Controls */}
+        {profile.isPrivate && !isOwnProfile && !isFollowing ? (
+          <Fade in timeout={500}>
+            <Box
+              sx={{
+                textAlign: 'center',
+                py: 8,
+                px: 3,
+                bgcolor: '#fff',
+                borderRadius: '24px',
+                border: '1px solid #EFF3F4',
+                mt: 4,
+                mx: { xs: 2, sm: 0 },
+              }}
+            >
+              <Box
+                sx={{
+                  width: 64,
+                  height: 64,
+                  borderRadius: '50%',
+                  bgcolor: '#F7F8FA',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  mx: 'auto',
+                  mb: 2.5,
+                }}
+              >
+                <LockIcon sx={{ fontSize: 28, color: '#536471' }} />
+              </Box>
+              <Typography variant="h6" sx={{ fontWeight: 800, color: '#0F1419', mb: 1, fontSize: '1.05rem', letterSpacing: '-0.3px' }}>
+                This account is private
+              </Typography>
+              <Typography variant="body2" sx={{ color: '#536471', fontSize: '0.85rem', maxWidth: 280, mx: 'auto', lineHeight: 1.5 }}>
+                Follow @{profile.username} to view their Creative Board and Timeline.
+              </Typography>
+            </Box>
+          </Fade>
+        ) : (
+          <>
+            {/* Tab Controls */}
+            <Box sx={{ display: 'flex', justifyContent: 'center', gap: 2, mt: 4, mb: 2.5, px: { xs: 2, sm: 0 }, flexWrap: 'wrap' }}>
+              <Button
+                onClick={() => setActiveTab('board')}
+                startIcon={<DashboardIcon sx={{ fontSize: 18 }} />}
+                sx={{
+                  borderRadius: 50,
+                  px: 3,
+                  py: 1,
+                  bgcolor: activeTab === 'board' ? '#0F1419' : 'rgba(15, 20, 25, 0.04)',
+                  color: activeTab === 'board' ? '#fff' : '#536471',
+                  fontWeight: 700,
+                  fontSize: '0.82rem',
+                  textTransform: 'none',
+                  transition: 'all 0.2s ease',
+                  boxShadow: activeTab === 'board' ? '0 4px 12px rgba(15,20,25,0.12)' : 'none',
+                  '&:hover': { bgcolor: activeTab === 'board' ? '#1A2530' : 'rgba(15,20,25,0.08)' }
+                }}
+              >
+                Creative Board
+              </Button>
+              <Button
+                onClick={() => setActiveTab('timeline')}
+                startIcon={<TimelineIcon sx={{ fontSize: 18 }} />}
+                sx={{
+                  borderRadius: 50,
+                  px: 3,
+                  py: 1,
+                  bgcolor: activeTab === 'timeline' ? '#0F1419' : 'rgba(15, 20, 25, 0.04)',
+                  color: activeTab === 'timeline' ? '#fff' : '#536471',
+                  fontWeight: 700,
+                  fontSize: '0.82rem',
+                  textTransform: 'none',
+                  transition: 'all 0.2s ease',
+                  boxShadow: activeTab === 'timeline' ? '0 4px 12px rgba(15,20,25,0.12)' : 'none',
+                  '&:hover': { bgcolor: activeTab === 'timeline' ? '#1A2530' : 'rgba(15,20,25,0.08)' }
+                }}
+              >
+                Timeline
+              </Button>
+              {isOwnProfile && (
+                <Button
+                  onClick={() => setActiveTab('requests')}
+                  startIcon={
+                    <Badge badgeContent={profile.followRequestsReceived?.length} color="error" sx={{ '& .MuiBadge-badge': { right: -3, top: 3 } }}>
+                      <PeopleIcon sx={{ fontSize: 18 }} />
+                    </Badge>
+                  }
+                  sx={{
+                    borderRadius: 50,
+                    px: 3,
+                    py: 1,
+                    bgcolor: activeTab === 'requests' ? '#0F1419' : 'rgba(15, 20, 25, 0.04)',
+                    color: activeTab === 'requests' ? '#fff' : '#536471',
+                    fontWeight: 700,
+                    fontSize: '0.82rem',
+                    textTransform: 'none',
+                    transition: 'all 0.2s ease',
+                    boxShadow: activeTab === 'requests' ? '0 4px 12px rgba(15,20,25,0.12)' : 'none',
+                    '&:hover': { bgcolor: activeTab === 'requests' ? '#1A2530' : 'rgba(15,20,25,0.08)' }
+                  }}
+                >
+                  Requests
+                </Button>
+              )}
+            </Box>
 
-        {/* User Posts View */}
-        {postsLoading ? (
-          <Box display="flex" justifyContent="center" py={6}>
-            <CircularProgress size={24} sx={{ color: '#0F1419' }} />
-          </Box>
-        ) : posts.length === 0 ? (
-          <Box sx={{ textAlign: 'center', py: 8, bgcolor: '#fff', borderRadius: '24px', border: '1px solid #EFF3F4', mt: 1, mx: { xs: 2, sm: 0 }, px: 3 }}>
-            <Typography variant="h6" sx={{ fontWeight: 700, color: '#0F1419', mb: 1, fontSize: '1rem' }}>
-              No posts yet
-            </Typography>
-            <Typography variant="body2" sx={{ color: '#536471', fontSize: '0.85rem' }}>
-              {isOwnProfile ? "You haven't shared any vibes yet. Head to home feed to write one!" : `@${profile.username} hasn't posted anything yet.`}
-            </Typography>
-          </Box>
-        ) : activeTab === 'board' ? (
-          /* Creative Board View: masonry-style collage grid */
-          <Box
-            sx={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(2, 1fr)',
-              gap: { xs: 1.5, sm: 2.5 },
-              mt: 1,
-              px: { xs: 1.5, sm: 0 },
-            }}
-          >
-            {posts.map((postItem, idx) => (
-              <Fade in key={postItem._id} timeout={200 + Math.min(idx * 50, 300)}>
-                {postItem.image ? (
-                  /* Image Tile */
-                  <Box
-                    onClick={() => setSelectedPost(postItem)}
-                    sx={{
-                      position: 'relative',
-                      borderRadius: '20px',
-                      overflow: 'hidden',
-                      cursor: 'pointer',
-                      aspectRatio: '1 / 1',
-                      bgcolor: '#fff',
-                      border: '1px solid #EFF3F4',
-                      boxShadow: '0 4px 16px rgba(0,0,0,0.02)',
-                      transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                      '&:hover': {
-                        transform: 'translateY(-4px)',
-                        boxShadow: '0 12px 24px rgba(0,0,0,0.08)',
-                        '& .board-image': {
-                          transform: 'scale(1.05)',
-                          filter: 'brightness(0.85)',
-                        },
-                        '& .board-overlay': {
-                          opacity: 1,
-                        }
-                      }
-                    }}
-                  >
-                    <img
-                      className="board-image"
-                      src={postItem.image}
-                      alt="post tile"
-                      style={{
-                        width: '100%',
-                        height: '100%',
-                        objectFit: 'cover',
-                        transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
-                        display: 'block',
-                      }}
-                    />
-                    {/* Hover Stats Panel */}
-                    <Box
-                      className="board-overlay"
-                      sx={{
-                        position: 'absolute',
-                        inset: 0,
-                        bgcolor: 'rgba(15, 20, 25, 0.4)',
-                        backdropFilter: 'blur(3px)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: 2.5,
-                        opacity: 0,
-                        transition: 'opacity 0.25s ease',
-                        color: '#fff',
-                      }}
-                    >
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.6 }}>
-                        <FavoriteIcon sx={{ fontSize: 18 }} />
-                        <Typography sx={{ fontWeight: 700, fontSize: '0.9rem' }}>{postItem.likesCount}</Typography>
-                      </Box>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.6 }}>
-                        <CommentIcon sx={{ fontSize: 18 }} />
-                        <Typography sx={{ fontWeight: 700, fontSize: '0.9rem' }}>{postItem.commentsCount}</Typography>
-                      </Box>
-                    </Box>
+            {/* User Posts View / Requests View */}
+            {postsLoading ? (
+              <Box display="flex" justifyContent="center" py={6}>
+                <CircularProgress size={24} sx={{ color: '#0F1419' }} />
+              </Box>
+            ) : activeTab === 'requests' ? (
+              <Box sx={{ mx: { xs: 2, sm: 0 }, mt: 1 }}>
+                {profile.followRequestsReceived?.length === 0 ? (
+                  <Box sx={{ textAlign: 'center', py: 8, bgcolor: '#fff', borderRadius: '24px', border: '1px solid #EFF3F4', px: 3 }}>
+                    <Typography variant="h6" sx={{ fontWeight: 700, color: '#0F1419', mb: 1, fontSize: '1rem' }}>
+                      No pending requests
+                    </Typography>
+                    <Typography variant="body2" sx={{ color: '#536471', fontSize: '0.85rem' }}>
+                      When people request to follow you, they will appear here.
+                    </Typography>
                   </Box>
                 ) : (
-                  /* Custom Quote Card Tile */
-                  <Box
-                    onClick={() => setSelectedPost(postItem)}
-                    sx={{
-                      position: 'relative',
-                      borderRadius: '20px',
-                      overflow: 'hidden',
-                      cursor: 'pointer',
-                      aspectRatio: '1 / 1',
-                      background: getPostColor(postItem._id),
-                      border: '1px solid rgba(15, 20, 25, 0.03)',
-                      p: { xs: 2, sm: 3 },
-                      display: 'flex',
-                      flexDirection: 'column',
-                      justifyContent: 'space-between',
-                      boxShadow: '0 4px 16px rgba(0,0,0,0.02)',
-                      transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                      '&:hover': {
-                        transform: 'translateY(-4px)',
-                        boxShadow: '0 12px 24px rgba(0,0,0,0.08)',
-                        '& .quote-mark': {
-                          transform: 'scale(1.1) rotate(-5deg)',
-                          opacity: 0.12,
-                        }
-                      }
-                    }}
-                  >
-                    <Typography
-                      className="quote-mark"
-                      sx={{
-                        position: 'absolute',
-                        top: -10,
-                        right: 15,
-                        fontSize: '7rem',
-                        fontWeight: 900,
-                        color: getPostAccent(postItem._id),
-                        opacity: 0.07,
-                        userSelect: 'none',
-                        transition: 'all 0.3s ease',
-                        lineHeight: 1,
-                      }}
-                    >
-                      “
-                    </Typography>
-
-                    <Typography
-                      variant="body1"
-                      sx={{
-                        fontWeight: 600,
-                        fontSize: { xs: '0.83rem', sm: '0.92rem' },
-                        color: '#0F1419',
-                        lineHeight: 1.45,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        display: '-webkit-box',
-                        WebkitLineClamp: 5,
-                        WebkitBoxOrient: 'vertical',
-                        zIndex: 1,
-                        borderLeft: `3.5px solid ${getPostAccent(postItem._id)}`,
-                        pl: 1.2,
-                      }}
-                    >
-                      {postItem.text}
-                    </Typography>
-
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, color: '#536471', mt: 1, zIndex: 1 }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                        <FavoriteIcon sx={{ fontSize: 15, color: '#FF3040' }} />
-                        <Typography sx={{ fontWeight: 700, fontSize: '0.75rem' }}>{postItem.likesCount}</Typography>
-                      </Box>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                        <CommentIcon sx={{ fontSize: 14 }} />
-                        <Typography sx={{ fontWeight: 700, fontSize: '0.75rem' }}>{postItem.commentsCount}</Typography>
-                      </Box>
-                    </Box>
+                  <Box sx={{ bgcolor: '#fff', borderRadius: '24px', p: 1, border: '1px solid #EFF3F4', boxShadow: 'none' }}>
+                    <List disablePadding>
+                      {profile.followRequestsReceived.map((reqUser, idx) => (
+                        <ListItem
+                          key={reqUser._id || reqUser}
+                          disablePadding
+                          sx={{
+                            borderBottom: idx === profile.followRequestsReceived.length - 1 ? 'none' : '1px solid #EFF3F4',
+                          }}
+                          secondaryAction={
+                            <Box sx={{ display: 'flex', gap: 1, mr: 1 }}>
+                              <Button
+                                variant="contained"
+                                size="small"
+                                onClick={() => handleAcceptRequestFromUser(reqUser._id || reqUser)}
+                                sx={{
+                                  borderRadius: 50,
+                                  textTransform: 'none',
+                                  fontSize: '0.78rem',
+                                  fontWeight: 700,
+                                  bgcolor: '#10B981',
+                                  '&:hover': { bgcolor: '#059669' }
+                                }}
+                              >
+                                Accept
+                              </Button>
+                              <Button
+                                variant="outlined"
+                                size="small"
+                                onClick={() => handleRejectRequestFromUser(reqUser._id || reqUser)}
+                                sx={{
+                                  borderRadius: 50,
+                                  textTransform: 'none',
+                                  fontSize: '0.78rem',
+                                  fontWeight: 700,
+                                  borderColor: '#FF4757',
+                                  color: '#FF4757',
+                                  '&:hover': { borderColor: '#E11D48', bgcolor: 'rgba(255,71,87,0.04)' }
+                                }}
+                              >
+                                Reject
+                              </Button>
+                            </Box>
+                          }
+                        >
+                          <Box
+                            onClick={() => navigate(`/profile/${reqUser._id || reqUser}`)}
+                            sx={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 1.5,
+                              width: '100%',
+                              py: 1.5,
+                              px: 2,
+                              cursor: 'pointer',
+                              transition: 'background-color 0.15s',
+                              '&:hover': { bgcolor: '#F7F8FA' },
+                            }}
+                          >
+                            <Avatar
+                              src={reqUser.profilePic}
+                              sx={{ bgcolor: stringToColor(reqUser.username), width: 38, height: 38, fontSize: '0.85rem', fontWeight: 700 }}
+                            >
+                              {reqUser.username ? reqUser.username[0].toUpperCase() : '?'}
+                            </Avatar>
+                            <Box sx={{ minWidth: 0, flex: 1, pr: 16 }}>
+                              <Typography sx={{ fontWeight: 700, fontSize: '0.88rem', color: '#0F1419', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {reqUser.username}
+                              </Typography>
+                            </Box>
+                          </Box>
+                        </ListItem>
+                      ))}
+                    </List>
                   </Box>
                 )}
-              </Fade>
-            ))}
-          </Box>
-        ) : (
-          /* Timeline View: Chronological standard list of cards */
-          <Box sx={{ px: { xs: 0, sm: 0 }, mt: 1 }}>
-            {posts.map((postItem, idx) => (
-              <Fade in key={postItem._id} timeout={200 + Math.min(idx * 50, 300)}>
-                <div>
-                  <Post
-                    post={postItem}
-                    onPostUpdate={handlePostUpdate}
-                    onPostDelete={handlePostDelete}
-                  />
-                </div>
-              </Fade>
-            ))}
-          </Box>
+              </Box>
+            ) : posts.length === 0 ? (
+              <Box sx={{ textAlign: 'center', py: 8, bgcolor: '#fff', borderRadius: '24px', border: '1px solid #EFF3F4', mt: 1, mx: { xs: 2, sm: 0 }, px: 3 }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, color: '#0F1419', mb: 1, fontSize: '1rem' }}>
+                  No posts yet
+                </Typography>
+                <Typography variant="body2" sx={{ color: '#536471', fontSize: '0.85rem' }}>
+                  {isOwnProfile ? "You haven't shared any vibes yet. Head to home feed to write one!" : `@${profile.username} hasn't posted anything yet.`}
+                </Typography>
+              </Box>
+            ) : activeTab === 'board' ? (
+              /* Creative Board View: masonry-style collage grid */
+              <Box
+                sx={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(2, 1fr)',
+                  gap: { xs: 1.5, sm: 2.5 },
+                  mt: 1,
+                  px: { xs: 1.5, sm: 0 },
+                }}
+              >
+                {posts.map((postItem, idx) => (
+                  <Fade in key={postItem._id} timeout={200 + Math.min(idx * 50, 300)}>
+                    {postItem.image ? (
+                      /* Image Tile */
+                      <Box
+                        onClick={() => setSelectedPost(postItem)}
+                        sx={{
+                          position: 'relative',
+                          borderRadius: '20px',
+                          overflow: 'hidden',
+                          cursor: 'pointer',
+                          aspectRatio: idx % 3 === 0 ? '4/5' : '1/1',
+                          boxShadow: '0 4px 20px rgba(0,0,0,0.02)',
+                          border: '1px solid #EFF3F4',
+                          '& img': {
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'cover',
+                            transition: 'transform 0.4s cubic-bezier(0.165, 0.84, 0.44, 1)',
+                          },
+                          '&:hover img': {
+                            transform: 'scale(1.05)',
+                          },
+                          '&:hover .tile-overlay': {
+                            opacity: 1,
+                          }
+                        }}
+                      >
+                        <img src={postItem.image} alt="Vibe tile" loading="lazy" />
+                        {/* Glass overlay on hover */}
+                        <Box
+                          className="tile-overlay"
+                          sx={{
+                            position: 'absolute',
+                            inset: 0,
+                            bgcolor: 'rgba(15, 20, 25, 0.35)',
+                            backdropFilter: 'blur(4px)',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            justifyContent: 'end',
+                            p: 2,
+                            opacity: 0,
+                            transition: 'opacity 0.25s ease',
+                          }}
+                        >
+                          <Typography variant="body2" sx={{ color: '#fff', fontWeight: 600, mb: 1, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', fontSize: '0.8rem', lineHeight: 1.3 }}>
+                            {postItem.text}
+                          </Typography>
+                          <Box sx={{ display: 'flex', gap: 2, color: 'rgba(255,255,255,0.9)' }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                              <FavoriteIcon sx={{ fontSize: 14 }} />
+                              <Typography sx={{ fontWeight: 700, fontSize: '0.72rem' }}>{postItem.likesCount}</Typography>
+                            </Box>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                              <CommentIcon sx={{ fontSize: 13 }} />
+                              <Typography sx={{ fontWeight: 700, fontSize: '0.72rem' }}>{postItem.commentsCount}</Typography>
+                            </Box>
+                          </Box>
+                        </Box>
+                      </Box>
+                    ) : (
+                      /* Quote Tile: Hash-colored dynamic gradients */
+                      <Box
+                        onClick={() => setSelectedPost(postItem)}
+                        sx={{
+                          position: 'relative',
+                          borderRadius: '20px',
+                          overflow: 'hidden',
+                          cursor: 'pointer',
+                          aspectRatio: '1 / 1',
+                          background: getPostColor(postItem._id),
+                          border: '1px solid rgba(15, 20, 25, 0.03)',
+                          p: { xs: 2, sm: 3 },
+                          display: 'flex',
+                          flexDirection: 'column',
+                          justifyContent: 'space-between',
+                          boxShadow: '0 4px 16px rgba(0,0,0,0.02)',
+                          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                          '&:hover': {
+                            transform: 'translateY(-4px)',
+                            boxShadow: '0 12px 24px rgba(0,0,0,0.08)',
+                            '& .quote-mark': {
+                              transform: 'scale(1.1) rotate(-5deg)',
+                              opacity: 0.12,
+                            }
+                          }
+                        }}
+                      >
+                        <Typography
+                          className="quote-mark"
+                          sx={{
+                            position: 'absolute',
+                            top: -10,
+                            right: 15,
+                            fontSize: '7rem',
+                            fontWeight: 900,
+                            color: getPostAccent(postItem._id),
+                            opacity: 0.07,
+                            userSelect: 'none',
+                            transition: 'all 0.3s ease',
+                            lineHeight: 1,
+                          }}
+                        >
+                          “
+                        </Typography>
+
+                        <Typography
+                          variant="body1"
+                          sx={{
+                            fontWeight: 600,
+                            fontSize: { xs: '0.83rem', sm: '0.92rem' },
+                            color: '#0F1419',
+                            lineHeight: 1.45,
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            display: '-webkit-box',
+                            WebkitLineClamp: 5,
+                            WebkitBoxOrient: 'vertical',
+                            zIndex: 1,
+                            borderLeft: `3.5px solid ${getPostAccent(postItem._id)}`,
+                            pl: 1.2,
+                          }}
+                        >
+                          {postItem.text}
+                        </Typography>
+
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, color: '#536471', mt: 1, zIndex: 1 }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                            <FavoriteIcon sx={{ fontSize: 15, color: '#FF3040' }} />
+                            <Typography sx={{ fontWeight: 700, fontSize: '0.75rem' }}>{postItem.likesCount}</Typography>
+                          </Box>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                            <CommentIcon sx={{ fontSize: 14 }} />
+                            <Typography sx={{ fontWeight: 700, fontSize: '0.75rem' }}>{postItem.commentsCount}</Typography>
+                          </Box>
+                        </Box>
+                      </Box>
+                    )}
+                  </Fade>
+                ))}
+              </Box>
+            ) : (
+              /* Timeline View: Chronological standard list of cards */
+              <Box sx={{ px: { xs: 0, sm: 0 }, mt: 1 }}>
+                {posts.map((postItem, idx) => (
+                  <Fade in key={postItem._id} timeout={200 + Math.min(idx * 50, 300)}>
+                    <div>
+                      <Post
+                        post={postItem}
+                        onPostUpdate={handlePostUpdate}
+                        onPostDelete={handlePostDelete}
+                      />
+                    </div>
+                  </Fade>
+                ))}
+              </Box>
+            )}
+          </>
         )}
       </Box>
 
@@ -804,6 +999,27 @@ const Profile = () => {
                   '&.Mui-focused fieldset': { borderColor: '#0F1419' },
                 },
               }}
+            />
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={isPrivate}
+                  onChange={(e) => setIsPrivate(e.target.checked)}
+                  sx={{
+                    '& .MuiSwitch-switchBase.Mui-checked': { color: '#0F1419' },
+                    '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { bgcolor: '#0F1419' },
+                  }}
+                />
+              }
+              label={
+                <Box sx={{ ml: 0.5 }}>
+                  <Typography sx={{ fontWeight: 700, fontSize: '0.85rem', color: '#0F1419' }}>Private Account</Typography>
+                  <Typography variant="caption" sx={{ color: '#536471', display: 'block', lineHeight: 1.3 }}>
+                    Only followers can view your board/timeline & send chats.
+                  </Typography>
+                </Box>
+              }
+              sx={{ mt: 2.5, width: '100%', ml: 0.5 }}
             />
           </Box>
         </DialogContent>

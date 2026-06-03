@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const Post = require('../models/Post');
+const User = require('../models/User');
 const auth = require('../middleware/auth');
 
 // --------------- Multer Config ---------------
@@ -102,8 +103,20 @@ router.get('/', async (req, res) => {
  * @desc    Get all posts by a specific user
  * @access  Public
  */
-router.get('/user/:userId', async (req, res) => {
+router.get('/user/:userId', auth, async (req, res) => {
   try {
+    const targetUser = await User.findById(req.params.userId);
+    if (!targetUser) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const isOwnProfile = req.user._id.toString() === targetUser._id.toString();
+    const isFollowing = targetUser.followers.some(id => id.toString() === req.user._id.toString());
+
+    if (targetUser.isPrivate && !isOwnProfile && !isFollowing) {
+      return res.status(403).json({ message: 'This account is private. Follow to see their posts.' });
+    }
+
     const posts = await Post.find({ user: req.params.userId })
       .sort({ createdAt: -1 })
       .lean();
