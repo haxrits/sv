@@ -178,6 +178,38 @@ router.put('/:id/reject-request', auth, async (req, res) => {
 });
 
 /**
+ * @route   GET /api/users/suggestions
+ * @desc    Get suggested users to follow
+ * @access  Private
+ */
+router.get('/suggestions', auth, async (req, res) => {
+  try {
+    const currentUser = await User.findById(req.user._id);
+    if (!currentUser) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const excludedIds = [
+      req.user._id,
+      ...currentUser.following,
+      ...currentUser.followRequestsSent,
+      ...currentUser.followRequestsReceived
+    ];
+
+    const suggestions = await User.find({
+      _id: { $nin: excludedIds }
+    })
+      .select('username profilePic bio')
+      .limit(5);
+
+    res.json(suggestions);
+  } catch (error) {
+    console.error('Fetch suggestions error:', error);
+    res.status(500).json({ message: 'Server Error' });
+  }
+});
+
+/**
  * @route   GET /api/users/search/:query
  * @desc    Search for users
  * @access  Public

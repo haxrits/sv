@@ -2,13 +2,15 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   AppBar, Toolbar, Typography, Button, Box, Avatar, Menu, MenuItem,
   IconButton, Divider, ListItemIcon, ListItemText, BottomNavigation, BottomNavigationAction, Paper, Badge,
-  Snackbar, Slide
+  Snackbar, Slide, Dialog, DialogContent, TextField, List, ListItem, CircularProgress
 } from '@mui/material';
 import {
   Logout as LogoutIcon,
   Person as PersonIcon,
   HomeRounded as HomeIcon,
-  ChatBubbleRounded as ChatIcon
+  ChatBubbleRounded as ChatIcon,
+  Search as SearchIcon,
+  Close as CloseIcon
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -27,6 +29,33 @@ const Navbar = () => {
   const [toastMessage, setToastMessage] = useState('');
   const [toastType, setToastType] = useState('message'); // 'message' or 'post'
   const [toastSender, setToastSender] = useState(null); // { id, username, profilePic }
+
+  // Search states
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setSearchResults([]);
+      return;
+    }
+
+    const delayDebounce = setTimeout(async () => {
+      setSearchLoading(true);
+      try {
+        const { data } = await API.get(`/users/search/${encodeURIComponent(searchQuery)}`);
+        setSearchResults(data);
+      } catch (err) {
+        console.error('Search failed', err);
+      } finally {
+        setSearchLoading(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(delayDebounce);
+  }, [searchQuery]);
 
   const fetchUnreadCount = useCallback(async () => {
     if (!user) return;
@@ -166,6 +195,18 @@ const Navbar = () => {
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
               <Box sx={{ display: { xs: 'none', sm: 'flex' }, gap: 0.5, mr: 1 }}>
                 <IconButton
+                  onClick={() => setSearchOpen(true)}
+                  sx={{
+                    color: '#536471',
+                    width: 38,
+                    height: 38,
+                    transition: 'all 0.15s ease',
+                    '&:hover': { bgcolor: '#EFF3F4', color: '#0F1419' },
+                  }}
+                >
+                  <SearchIcon sx={{ fontSize: 22 }} />
+                </IconButton>
+                <IconButton
                   onClick={() => navigate('/chat')}
                   sx={{
                     color: location.pathname.startsWith('/chat') ? '#0F1419' : '#536471',
@@ -213,6 +254,22 @@ const Navbar = () => {
                   <PersonIcon sx={{ fontSize: 22 }} />
                 </IconButton>
               </Box>
+
+              {/* Mobile Search Icon */}
+              <IconButton
+                onClick={() => setSearchOpen(true)}
+                sx={{
+                  display: { xs: 'flex', sm: 'none' },
+                  color: '#536471',
+                  width: 38,
+                  height: 38,
+                  mr: 0.5,
+                  transition: 'all 0.15s ease',
+                  '&:hover': { bgcolor: '#EFF3F4', color: '#0F1419' },
+                }}
+              >
+                <SearchIcon sx={{ fontSize: 22 }} />
+              </IconButton>
 
               <IconButton
                 onClick={(e) => setAnchorEl(e.currentTarget)}
@@ -441,6 +498,146 @@ const Navbar = () => {
           </Box>
         </Paper>
       </Snackbar>
+      {/* Search Dialog */}
+      <Dialog
+        open={searchOpen}
+        onClose={() => { setSearchOpen(false); setSearchQuery(''); }}
+        maxWidth="xs"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: '24px',
+            bgcolor: 'rgba(255, 255, 255, 0.95)',
+            backdropFilter: 'blur(20px)',
+            border: '1px solid rgba(15, 20, 25, 0.08)',
+            boxShadow: '0 24px 64px rgba(0,0,0,0.15)',
+            p: 1.5,
+            m: { xs: 2, sm: 4 },
+          }
+        }}
+      >
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 1, py: 0.5 }}>
+          <TextField
+            autoFocus
+            fullWidth
+            placeholder="Search people..."
+            variant="standard"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            InputProps={{
+              disableUnderline: true,
+              startAdornment: (
+                <SearchIcon sx={{ color: '#536471', mr: 1.5, fontSize: 22 }} />
+              ),
+              sx: {
+                fontSize: '1rem',
+                py: 1,
+                color: '#0F1419',
+                '& input::placeholder': { color: '#536471', opacity: 0.8 },
+              }
+            }}
+          />
+          {searchQuery && (
+            <IconButton 
+              size="small" 
+              onClick={() => setSearchQuery('')}
+              sx={{ color: '#536471' }}
+            >
+              <CloseIcon sx={{ fontSize: 18 }} />
+            </IconButton>
+          )}
+        </Box>
+
+        <Divider sx={{ my: 1, borderColor: '#EFF3F4' }} />
+
+        <DialogContent sx={{ p: 0, maxHeight: 350, minHeight: searchQuery ? 150 : 80, overflowY: 'auto' }}>
+          {searchLoading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 120 }}>
+              <CircularProgress size={24} sx={{ color: '#0F1419' }} />
+            </Box>
+          ) : !searchQuery.trim() ? (
+            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 80, color: '#536471' }}>
+              <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                Type to find other users on SocialVibe
+              </Typography>
+            </Box>
+          ) : searchResults.length === 0 ? (
+            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 120, color: '#536471', px: 2, textAlign: 'center' }}>
+              <Typography variant="body2" sx={{ fontWeight: 600, color: '#0F1419', mb: 0.5 }}>
+                No results for "{searchQuery}"
+              </Typography>
+              <Typography variant="caption">
+                Make sure the name is spelled correctly or try another search.
+              </Typography>
+            </Box>
+          ) : (
+            <List disablePadding>
+              {searchResults.map((u) => (
+                <ListItem
+                  key={u._id}
+                  disablePadding
+                  secondaryAction={
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      sx={{
+                        borderRadius: 50,
+                        textTransform: 'none',
+                        fontSize: '0.78rem',
+                        fontWeight: 700,
+                        color: '#0F1419',
+                        borderColor: '#CFD9DE',
+                        '&:hover': { bgcolor: '#EFF3F4', borderColor: '#0F1419' }
+                      }}
+                      onClick={() => {
+                        setSearchOpen(false);
+                        setSearchQuery('');
+                        navigate(`/profile/${u._id}`);
+                      }}
+                    >
+                      View
+                    </Button>
+                  }
+                >
+                  <Box
+                    onClick={() => {
+                      setSearchOpen(false);
+                      setSearchQuery('');
+                      navigate(`/profile/${u._id}`);
+                    }}
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 1.5,
+                      width: '100%',
+                      py: 1.2,
+                      px: 1.5,
+                      cursor: 'pointer',
+                      transition: 'background-color 0.15s',
+                      '&:hover': { bgcolor: '#F7F8FA' },
+                    }}
+                  >
+                    <Avatar
+                      src={u.profilePic}
+                      sx={{ bgcolor: '#0F1419', width: 38, height: 38, fontSize: '0.85rem', fontWeight: 700 }}
+                    >
+                      {u.username ? u.username[0].toUpperCase() : '?'}
+                    </Avatar>
+                    <Box sx={{ minWidth: 0, flex: 1, pr: 7 }}>
+                      <Typography sx={{ fontWeight: 700, fontSize: '0.88rem', color: '#0F1419', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {u.username}
+                      </Typography>
+                      <Typography sx={{ color: '#536471', fontSize: '0.75rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {u.bio || 'No bio yet'}
+                      </Typography>
+                    </Box>
+                  </Box>
+                </ListItem>
+              ))}
+            </List>
+          )}
+        </DialogContent>
+      </Dialog>
     </>
   );
 };

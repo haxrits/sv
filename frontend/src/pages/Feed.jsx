@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Box, Typography, CircularProgress, Fade } from '@mui/material';
-import { DynamicFeed as EmptyIcon } from '@mui/icons-material';
+import { Box, Typography, CircularProgress, Fade, Button, Avatar, Card } from '@mui/material';
+import { DynamicFeed as EmptyIcon, PersonAddOutlined as FollowIcon } from '@mui/icons-material';
 import Navbar from '../components/Navbar';
 import CreatePost from '../components/CreatePost';
 import Post from '../components/Post';
@@ -15,8 +15,39 @@ const Feed = () => {
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState('');
 
+  // Suggested users states
+  const [suggestions, setSuggestions] = useState([]);
+  const [followedMap, setFollowedMap] = useState({});
+
   // Intersection Observer element ref for infinite scrolling
   const observerTarget = useRef(null);
+
+  // Fetch Suggestions
+  const fetchSuggestions = useCallback(async () => {
+    try {
+      const { data } = await API.get('/users/suggestions');
+      setSuggestions(data);
+    } catch (err) {
+      console.error('Failed to fetch suggestions', err);
+    }
+  }, []);
+
+  // Handle follow suggestion
+  const handleFollowSuggestion = async (userId) => {
+    try {
+      setFollowedMap((prev) => ({ ...prev, [userId]: 'loading' }));
+      const { data } = await API.put(`/users/${userId}/follow`);
+      
+      let statusText = 'Follow';
+      if (data.status === 'request_sent') statusText = 'Requested';
+      else if (data.status === 'following') statusText = 'Following';
+      
+      setFollowedMap((prev) => ({ ...prev, [userId]: statusText }));
+    } catch (err) {
+      console.error('Failed to follow user suggestion', err);
+      setFollowedMap((prev) => ({ ...prev, [userId]: 'error' }));
+    }
+  };
 
   // Fetch Posts Logic
   const fetchPosts = useCallback(async (pageNum = 1) => {
@@ -45,6 +76,7 @@ const Feed = () => {
   // Initial fetch and Realtime listeners
   useEffect(() => {
     fetchPosts(1);
+    fetchSuggestions();
     setPage(1);
 
     const handleNewPost = (post) => {
@@ -66,7 +98,7 @@ const Feed = () => {
       socket.off('post_updated', handleUpdatePost);
       socket.off('post_deleted', handleDeletePost);
     };
-  }, [fetchPosts]);
+  }, [fetchPosts, fetchSuggestions]);
 
   // Infinite Scroll Observer setup
   useEffect(() => {
@@ -164,9 +196,88 @@ const Feed = () => {
               <Typography variant="h6" sx={{ fontWeight: 700, color: '#0F1419', mb: 1, fontSize: '1.1rem' }}>
                 No posts yet
               </Typography>
-              <Typography variant="body2" sx={{ color: '#536471', fontSize: '0.88rem', maxWidth: 280, mx: 'auto', lineHeight: 1.5 }}>
+              <Typography variant="body2" sx={{ color: '#536471', fontSize: '0.88rem', maxWidth: 280, mx: 'auto', lineHeight: 1.5, mb: 1 }}>
                 Be the first to share something amazing with the community
               </Typography>
+
+              {/* Suggested Users to Follow */}
+              {suggestions.length > 0 && (
+                <Card
+                  sx={{
+                    maxWidth: 420,
+                    mx: 'auto',
+                    mt: 4,
+                    p: 2.5,
+                    borderRadius: '24px',
+                    bgcolor: 'rgba(255, 255, 255, 0.75)',
+                    backdropFilter: 'blur(20px)',
+                    border: '1px solid rgba(255, 255, 255, 0.5)',
+                    boxShadow: '0 8px 32px rgba(15,20,25,0.03)',
+                    textAlign: 'left',
+                  }}
+                >
+                  <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#0F1419', mb: 2.2, fontSize: '0.95rem', letterSpacing: '-0.3px' }}>
+                    Who to follow
+                  </Typography>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    {suggestions.map((u) => {
+                      const followStatus = followedMap[u._id] || 'Follow';
+                      const isLoading = followStatus === 'loading';
+                      
+                      return (
+                        <Box key={u._id} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1.5 }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, minWidth: 0, flex: 1 }}>
+                            <Avatar
+                              src={u.profilePic}
+                              sx={{ bgcolor: '#0F1419', width: 38, height: 38, fontSize: '0.85rem', fontWeight: 700 }}
+                            >
+                              {u.username ? u.username[0].toUpperCase() : '?'}
+                            </Avatar>
+                            <Box sx={{ minWidth: 0, flex: 1 }}>
+                              <Typography sx={{ fontWeight: 700, fontSize: '0.85rem', color: '#0F1419', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {u.username}
+                              </Typography>
+                              <Typography sx={{ color: '#536471', fontSize: '0.72rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {u.bio || 'No bio yet'}
+                              </Typography>
+                            </Box>
+                          </Box>
+                          <Button
+                            variant={followStatus === 'Follow' ? 'contained' : 'outlined'}
+                            size="small"
+                            disabled={isLoading}
+                            onClick={() => handleFollowSuggestion(u._id)}
+                            sx={{
+                              borderRadius: 50,
+                              textTransform: 'none',
+                              fontSize: '0.75rem',
+                              fontWeight: 700,
+                              py: 0.6,
+                              px: 2,
+                              minWidth: 80,
+                              bgcolor: followStatus === 'Follow' ? '#0F1419' : 'transparent',
+                              color: followStatus === 'Follow' ? '#fff' : '#0F1419',
+                              borderColor: followStatus === 'Follow' ? 'transparent' : '#CFD9DE',
+                              boxShadow: 'none',
+                              '&:hover': {
+                                bgcolor: followStatus === 'Follow' ? '#1A2530' : '#EFF3F4',
+                                borderColor: followStatus === 'Follow' ? 'transparent' : '#0F1419',
+                                boxShadow: 'none',
+                              },
+                              '&.Mui-disabled': {
+                                bgcolor: followStatus === 'Follow' ? '#CFD9DE' : 'transparent',
+                                color: '#A0AEC0',
+                              }
+                            }}
+                          >
+                            {isLoading ? <CircularProgress size={16} sx={{ color: '#fff' }} /> : followStatus}
+                          </Button>
+                        </Box>
+                      );
+                    })}
+                  </Box>
+                </Card>
+              )}
             </Box>
           </Fade>
         ) : (
